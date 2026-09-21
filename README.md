@@ -23,7 +23,9 @@ os sensores entrar.
 
 ## Como executar
 
-1. Instale o [Flutter SDK](https://docs.flutter.dev/get-started/install) e coloque-o no PATH.
+1. Instale o [Flutter SDK](https://docs.flutter.dev/get-started/install) **stable 3.47 ou mais recente**
+   e coloque-o no PATH. A pasta `android/` segue o template dessa versão (Gradle 9.3.1,
+   AGP 9.1.0, Kotlin 2.4.0); versões antigas do Flutter podem recusar o build.
 2. Rode o app em um dispositivo ou emulador Wear OS:
 
 ```bash
