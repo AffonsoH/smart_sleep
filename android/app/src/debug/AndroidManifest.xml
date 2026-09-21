@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- O Flutter usa a rede local em debug para comunicação com as ferramentas
+         de desenvolvimento (hot reload, DevTools). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
