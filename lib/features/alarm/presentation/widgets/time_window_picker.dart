@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/time_of_day_ext.dart';
+import '../pages/time_editor_page.dart';
 
 class TimeWindowPicker extends StatelessWidget {
   const TimeWindowPicker({
@@ -20,17 +21,14 @@ class TimeWindowPicker extends StatelessWidget {
 
   Future<void> _pickTime(
     BuildContext context, {
+    required String title,
     required TimeOfDay current,
     required ValueChanged<TimeOfDay> onChanged,
   }) async {
-    final selected = await showTimePicker(
-      context: context,
-      initialTime: current,
-      helpText: 'Escolha o horário',
-      cancelText: 'Cancelar',
-      confirmText: 'OK',
-      hourLabelText: 'Hora',
-      minuteLabelText: 'Minuto',
+    final selected = await Navigator.of(context).push<TimeOfDay>(
+      MaterialPageRoute<TimeOfDay>(
+        builder: (_) => TimeEditorPage(title: title, initialTime: current),
+      ),
     );
 
     if (selected != null) {
@@ -47,6 +45,7 @@ class TimeWindowPicker extends StatelessWidget {
           time: startTime.formatted,
           onTap: () => _pickTime(
             context,
+            title: 'Início da janela',
             current: startTime,
             onChanged: onStartChanged,
           ),
@@ -57,6 +56,7 @@ class TimeWindowPicker extends StatelessWidget {
           time: endTime.formatted,
           onTap: () => _pickTime(
             context,
+            title: 'Fim da janela',
             current: endTime,
             onChanged: onEndChanged,
           ),
