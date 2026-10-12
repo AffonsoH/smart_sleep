@@ -20,4 +20,35 @@ class AlarmSettings {
 
   String get windowLabel =>
       '${startTime.formatted}  →  ${endTime.formatted}';
+
+  /// Próxima ocorrência da janela a partir de [from].
+  ///
+  /// Se o horário de início já passou hoje, a janela é a de amanhã.
+  ({DateTime start, DateTime end}) nextWindow(DateTime from) {
+    var start = DateTime(
+      from.year,
+      from.month,
+      from.day,
+      startTime.hour,
+      startTime.minute,
+    );
+
+    if (!start.isAfter(from)) {
+      start = start.add(const Duration(days: 1));
+    }
+
+    var end = DateTime(
+      start.year,
+      start.month,
+      start.day,
+      endTime.hour,
+      endTime.minute,
+    );
+
+    if (!end.isAfter(start)) {
+      end = end.add(const Duration(days: 1));
+    }
+
+    return (start: start, end: end);
+  }
 }

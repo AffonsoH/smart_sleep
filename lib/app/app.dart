@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_theme.dart';
-import '../features/alarm/presentation/pages/home_page.dart';
+import '../features/alarm/presentation/pages/alarm_gate.dart';
 
 class SmartSleepApp extends StatelessWidget {
   const SmartSleepApp({super.key});
@@ -12,7 +12,7 @@ class SmartSleepApp extends StatelessWidget {
       title: 'Smart Sleep',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const HomePage(),
+      home: const AlarmGate(),
     );
   }
 }

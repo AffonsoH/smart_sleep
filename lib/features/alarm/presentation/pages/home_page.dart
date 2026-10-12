@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../services/native/native_bridge.dart';
@@ -5,24 +7,40 @@ import '../../data/models/alarm_settings.dart';
 import '../widgets/time_window_picker.dart';
 import 'confirmation_page.dart';
 
+/// Tela principal: configura a janela quando o alarme está desarmado e
+/// mostra o monitoramento quando está armado.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({
+    super.key,
+    required this.state,
+    required this.sampling,
+    required this.busy,
+    required this.onSchedule,
+    required this.onCancel,
+    required this.onRequestPermissions,
+    this.lastMovement,
+    this.errorText,
+  });
+
+  final SleepAlarmState state;
+  final bool sampling;
+  final bool busy;
+  final MovementEvent? lastMovement;
+  final String? errorText;
+
+  /// Retorna true quando a janela foi realmente agendada no nativo.
+  final Future<bool> Function(AlarmSettings settings) onSchedule;
+  final Future<void> Function() onCancel;
+  final Future<void> Function() onRequestPermissions;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  static const NativeBridge _nativeBridge = NativeBridge();
-
   TimeOfDay _startTime = const TimeOfDay(hour: 6, minute: 30);
   TimeOfDay _endTime = const TimeOfDay(hour: 7, minute: 0);
-  String? _errorText;
-
-  // Estado do teste temporário de comunicação com o Kotlin.
-  String? _nativeMessage;
-  bool _nativeFailed = false;
-  bool _testingNative = false;
+  String? _validationError;
 
   AlarmSettings get _settings => AlarmSettings(
         startTime: _startTime,
@@ -32,61 +50,39 @@ class _HomePageState extends State<HomePage> {
   void _onStartChanged(TimeOfDay time) {
     setState(() {
       _startTime = time;
-      _errorText = null;
+      _validationError = null;
     });
   }
 
   void _onEndChanged(TimeOfDay time) {
     setState(() {
       _endTime = time;
-      _errorText = null;
+      _validationError = null;
     });
   }
 
-  void _confirmAlarm() {
+  Future<void> _confirmAlarm() async {
     if (!_settings.isValid) {
       setState(() {
-        _errorText =
+        _validationError =
             'O horário final precisa ser posterior ao horário inicial.';
       });
       return;
     }
 
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ConfirmationPage(settings: _settings),
-      ),
-    );
-  }
+    setState(() => _validationError = null);
+    final settings = _settings;
 
-  /// Teste temporário: confirma que o Flutter conversa com a camada Kotlin.
-  /// Deve sair da tela quando a integração real com os sensores existir.
-  Future<void> _testNativeConnection() async {
-    setState(() {
-      _testingNative = true;
-      _nativeMessage = null;
-    });
-
-    String message;
-    bool failed;
-
-    try {
-      message = await _nativeBridge.getNativeStatus();
-      failed = false;
-    } on NativeBridgeException catch (error) {
-      message = error.message;
-      failed = true;
-    }
-
-    if (!mounted) {
+    final scheduled = await widget.onSchedule(settings);
+    if (!scheduled || !mounted) {
       return;
     }
 
-    setState(() {
-      _testingNative = false;
-      _nativeMessage = message;
-      _nativeFailed = failed;
-    });
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ConfirmationPage(settings: settings),
+      ),
+    );
   }
 
   @override
@@ -97,68 +93,27 @@ class _HomePageState extends State<HomePage> {
       body: SafeArea(
         // Tela de relógio é pequena: sem rolagem o conteúdo estoura o layout.
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
                 'Smart Sleep',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Escolha a janela em que você deseja acordar.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: colors.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(height: 36),
-              TimeWindowPicker(
-                startTime: _startTime,
-                endTime: _endTime,
-                onStartChanged: _onStartChanged,
-                onEndChanged: _onEndChanged,
-                errorText: _errorText,
-              ),
-              const SizedBox(height: 36),
-              FilledButton(
-                onPressed: _confirmAlarm,
-                child: const Text('Iniciar alarme'),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
-              // Botão temporário: existe só para validar o Platform Channel.
-              OutlinedButton(
-                onPressed: _testingNative ? null : _testNativeConnection,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: _testingNative
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Testar conexão nativa'),
-              ),
-              if (_nativeMessage != null) ...[
+              if (widget.state.armed)
+                ..._armedSection(colors)
+              else
+                ..._setupSection(colors),
+              ..._warnings(colors),
+              if (widget.errorText != null) ...[
                 const SizedBox(height: 12),
                 Text(
-                  _nativeMessage!,
+                  widget.errorText!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.3,
-                    color: _nativeFailed ? colors.error : colors.primary,
-                  ),
+                  style: TextStyle(fontSize: 12, color: colors.error),
                 ),
               ],
             ],
@@ -166,5 +121,180 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  // ------------------------------------------------------------- desarmado
+
+  List<Widget> _setupSection(ColorScheme colors) {
+    return [
+      Text(
+        'Escolha a janela em que você deseja acordar.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 13,
+          color: colors.onSurface.withValues(alpha: 0.7),
+        ),
+      ),
+      const SizedBox(height: 16),
+      TimeWindowPicker(
+        startTime: _startTime,
+        endTime: _endTime,
+        onStartChanged: _onStartChanged,
+        onEndChanged: _onEndChanged,
+        errorText: _validationError,
+      ),
+      const SizedBox(height: 20),
+      FilledButton(
+        onPressed: widget.busy ? null : () => unawaited(_confirmAlarm()),
+        child: widget.busy
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Iniciar alarme'),
+      ),
+    ];
+  }
+
+  // ---------------------------------------------------------------- armado
+
+  List<Widget> _armedSection(ColorScheme colors) {
+    final start = widget.state.windowStart;
+    final end = widget.state.windowEnd;
+    final label = start != null && end != null
+        ? '${_hhmm(start)}  →  ${_hhmm(end)}'
+        : _settings.windowLabel;
+
+    return [
+      Icon(Icons.bedtime_rounded, size: 34, color: colors.primary),
+      const SizedBox(height: 8),
+      Text(
+        label,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        widget.sampling
+            ? 'Observando o movimento do pulso.'
+            : 'Alarme armado. O monitoramento começa no início da janela.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.3,
+          color: colors.onSurface.withValues(alpha: 0.7),
+        ),
+      ),
+      ..._movementIndicator(colors),
+      const SizedBox(height: 18),
+      OutlinedButton(
+        onPressed: widget.busy ? null : () => unawaited(widget.onCancel()),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: const Text('Cancelar alarme'),
+      ),
+    ];
+  }
+
+  List<Widget> _movementIndicator(ColorScheme colors) {
+    final movement = widget.lastMovement;
+    if (movement == null || movement.threshold <= 0) {
+      return const [];
+    }
+
+    final ratio =
+        (movement.activity / movement.threshold).clamp(0.0, 1.0).toDouble();
+
+    return [
+      const SizedBox(height: 12),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: LinearProgressIndicator(
+          value: ratio,
+          minHeight: 6,
+          backgroundColor: colors.surface,
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'Movimento no último minuto: '
+        '${movement.activity.toStringAsFixed(1)} '
+        '(desperta em ${movement.threshold.toStringAsFixed(0)})',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 11,
+          color: colors.onSurface.withValues(alpha: 0.6),
+        ),
+      ),
+    ];
+  }
+
+  // --------------------------------------------------------------- avisos
+
+  List<Widget> _warnings(ColorScheme colors) {
+    final state = widget.state;
+    final messages = <String>[];
+
+    if (!state.hasAccelerometer) {
+      messages.add(
+        'Sem acelerômetro neste aparelho: só o despertar no fim da janela vai funcionar.',
+      );
+    }
+    if (!state.exactAlarmAllowed) {
+      messages.add(
+        'Alarme exato não autorizado: o despertar pode atrasar alguns minutos.',
+      );
+    }
+
+    final widgets = <Widget>[];
+
+    for (final message in messages) {
+      widgets.addAll([
+        const SizedBox(height: 10),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11,
+            height: 1.3,
+            color: colors.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+      ]);
+    }
+
+    if (!state.notificationsAllowed) {
+      widgets.addAll([
+        const SizedBox(height: 10),
+        Text(
+          'Sem permissão de notificação o alarme não aparece na tela.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11,
+            height: 1.3,
+            color: colors.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextButton(
+          onPressed:
+              widget.busy ? null : () => unawaited(widget.onRequestPermissions()),
+          child: const Text('Conceder permissões'),
+        ),
+      ]);
+    }
+
+    return widgets;
+  }
+
+  static String _hhmm(DateTime time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 }
